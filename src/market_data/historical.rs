@@ -470,7 +470,7 @@ pub(crate) fn historical_data(
 
         match subscription.next() {
             Some(Ok(mut message)) if message.message_type() == IncomingMessages::HistoricalData => {
-                return decoders::decode_historical_data(client.server_version, time_zone(client), &mut message)
+                return decoders::decode_historical_data(client.server_version, client.time_zone(), &mut message)
             }
             Some(Ok(message)) if message.message_type() == IncomingMessages::Error => return Err(Error::from(message)),
             Some(Ok(message)) => return Err(Error::UnexpectedResponse(message)),
@@ -481,15 +481,6 @@ pub(crate) fn historical_data(
     }
 
     Err(Error::ConnectionReset)
-}
-
-fn time_zone(client: &Client) -> &time_tz::Tz {
-    if let Some(tz) = client.time_zone {
-        tz
-    } else {
-        warn!("server timezone unknown. assuming UTC, but that may be incorrect!");
-        time_tz::timezones::db::UTC
-    }
 }
 
 pub(crate) fn historical_schedule(

@@ -54,9 +54,9 @@ pub struct BidAsk {
 impl DataStream<BidAsk> for BidAsk {
     const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::TickByTick];
 
-    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
+    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
         match message.message_type() {
-            IncomingMessages::TickByTick => decoders::decode_bid_ask_tick(message),
+            IncomingMessages::TickByTick => decoders::decode_bid_ask_tick(client.time_zone(), message),
             IncomingMessages::Error => Err(Error::from(message.clone())),
             _ => Err(Error::UnexpectedResponse(message.clone())),
         }
@@ -86,9 +86,9 @@ pub struct MidPoint {
 impl DataStream<MidPoint> for MidPoint {
     const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::TickByTick];
 
-    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
+    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
         match message.message_type() {
-            IncomingMessages::TickByTick => decoders::decode_mid_point_tick(message),
+            IncomingMessages::TickByTick => decoders::decode_mid_point_tick(client.time_zone(), message),
             IncomingMessages::Error => Err(Error::from(message.clone())),
             _ => Err(Error::UnexpectedResponse(message.clone())),
         }
@@ -124,8 +124,8 @@ pub struct Bar {
 impl DataStream<Bar> for Bar {
     const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::RealTimeBars];
 
-    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
-        decoders::decode_realtime_bar(message)
+    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
+        decoders::decode_realtime_bar(client.time_zone(), message)
     }
 
     fn cancel_message(_server_version: i32, request_id: Option<i32>, _context: &ResponseContext) -> Result<RequestMessage, Error> {
@@ -156,9 +156,9 @@ pub struct Trade {
 impl DataStream<Trade> for Trade {
     const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::TickByTick];
 
-    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
+    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
         match message.message_type() {
-            IncomingMessages::TickByTick => decoders::decode_trade_tick(message),
+            IncomingMessages::TickByTick => decoders::decode_trade_tick(client.time_zone(), message),
             IncomingMessages::Error => Err(Error::from(message.clone())),
             _ => Err(Error::UnexpectedResponse(message.clone())),
         }

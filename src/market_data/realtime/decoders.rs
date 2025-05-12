@@ -1,3 +1,5 @@
+use time_tz::{OffsetDateTimeExt, Tz};
+
 use crate::contracts::decoders::decode_option_computation;
 use crate::contracts::tick_types::TickType;
 use crate::contracts::OptionComputation;
@@ -12,13 +14,13 @@ use super::{
 #[cfg(test)]
 mod tests;
 
-pub(super) fn decode_realtime_bar(message: &mut ResponseMessage) -> Result<Bar, Error> {
+pub(super) fn decode_realtime_bar(time_zone: &Tz, message: &mut ResponseMessage) -> Result<Bar, Error> {
     message.skip(); // message type
     message.skip(); // message version
     message.skip(); // message request id
 
     Ok(Bar {
-        date: message.next_date_time()?,
+        date: message.next_date_time()?.to_timezone(time_zone),
         open: message.next_double()?,
         high: message.next_double()?,
         low: message.next_double()?,
@@ -29,7 +31,7 @@ pub(super) fn decode_realtime_bar(message: &mut ResponseMessage) -> Result<Bar, 
     })
 }
 
-pub(super) fn decode_trade_tick(message: &mut ResponseMessage) -> Result<Trade, Error> {
+pub(super) fn decode_trade_tick(time_zone: &Tz, message: &mut ResponseMessage) -> Result<Trade, Error> {
     message.skip(); // message type
     message.skip(); // message request id
 
@@ -38,7 +40,7 @@ pub(super) fn decode_trade_tick(message: &mut ResponseMessage) -> Result<Trade, 
         return Err(Error::Simple(format!("Unexpected tick_type: {tick_type}")));
     }
 
-    let date = message.next_date_time()?;
+    let date = message.next_date_time()?.to_timezone(time_zone);
     let price = message.next_double()?;
     let size = message.next_double()?;
     let mask = message.next_int()?;
@@ -59,7 +61,7 @@ pub(super) fn decode_trade_tick(message: &mut ResponseMessage) -> Result<Trade, 
     })
 }
 
-pub(super) fn decode_bid_ask_tick(message: &mut ResponseMessage) -> Result<BidAsk, Error> {
+pub(super) fn decode_bid_ask_tick(time_zone: &Tz, message: &mut ResponseMessage) -> Result<BidAsk, Error> {
     message.skip(); // message type
     message.skip(); // message request id
 
@@ -68,7 +70,7 @@ pub(super) fn decode_bid_ask_tick(message: &mut ResponseMessage) -> Result<BidAs
         return Err(Error::Simple(format!("Unexpected tick_type: {tick_type}")));
     }
 
-    let date = message.next_date_time()?;
+    let date = message.next_date_time()?.to_timezone(time_zone);
     let bid_price = message.next_double()?;
     let ask_price = message.next_double()?;
     let bid_size = message.next_double()?;
@@ -88,7 +90,7 @@ pub(super) fn decode_bid_ask_tick(message: &mut ResponseMessage) -> Result<BidAs
     })
 }
 
-pub(super) fn decode_mid_point_tick(message: &mut ResponseMessage) -> Result<MidPoint, Error> {
+pub(super) fn decode_mid_point_tick(time_zone: &Tz, message: &mut ResponseMessage) -> Result<MidPoint, Error> {
     message.skip(); // message type
     message.skip(); // message request id
 
@@ -98,7 +100,7 @@ pub(super) fn decode_mid_point_tick(message: &mut ResponseMessage) -> Result<Mid
     }
 
     Ok(MidPoint {
-        time: message.next_date_time()?,
+        time: message.next_date_time()?.to_timezone(time_zone),
         mid_point: message.next_double()?,
     })
 }

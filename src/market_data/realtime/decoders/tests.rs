@@ -10,7 +10,7 @@ mod realtime_bar_tests {
     fn test_decode_realtime_bar() {
         let mut message = ResponseMessage::from("50\0\09000\01678323335\04028.75\04029.00\04028.25\04028.50\02\04026.75\01\0");
 
-        let bar = decode_realtime_bar(&mut message).expect("Failed to decode realtime bar");
+        let bar = decode_realtime_bar(time_tz::timezones::db::UTC, &mut message).expect("Failed to decode realtime bar");
 
         assert_eq!(bar.date, OffsetDateTime::from_unix_timestamp(1678323335).unwrap(), "Wrong timestamp");
         assert_eq!(bar.open, 4028.75, "Wrong open price");
@@ -26,14 +26,14 @@ mod realtime_bar_tests {
     fn test_decode_realtime_bar_invalid_format() {
         let mut message = ResponseMessage::from("50\0\09000\0invalid_timestamp\04028.75\04029.00\04028.25\04028.50\02\04026.75\01\0");
 
-        let result = decode_realtime_bar(&mut message);
+        let result = decode_realtime_bar(time_tz::timezones::db::UTC, &mut message);
         assert!(result.is_err(), "Should fail with invalid timestamp");
     }
 
     #[test]
     fn test_decode_realtime_bar_empty_message() {
         let mut message = ResponseMessage::from("");
-        let result = decode_realtime_bar(&mut message);
+        let result = decode_realtime_bar(time_tz::timezones::db::UTC, &mut message);
         assert!(result.is_err(), "Should fail with empty message");
     }
 }
@@ -46,7 +46,7 @@ mod trade_tick_tests {
     fn test_decode_trade_tick() {
         let mut message = ResponseMessage::from("99\09000\01\01678740829\03895.25\07\02\0NASDAQ\0Regular\0");
 
-        let trade = decode_trade_tick(&mut message).expect("Failed to decode trade tick");
+        let trade = decode_trade_tick(time_tz::timezones::db::UTC, &mut message).expect("Failed to decode trade tick");
 
         assert_eq!(trade.tick_type, "1", "Wrong tick type");
         assert_eq!(trade.time, OffsetDateTime::from_unix_timestamp(1678740829).unwrap(), "Wrong timestamp");
@@ -62,7 +62,7 @@ mod trade_tick_tests {
     fn test_decode_trade_tick_invalid_type() {
         let mut message = ResponseMessage::from("99\09000\03\01678740829\03895.25\07\02\0NASDAQ\0Regular\0");
 
-        let result = decode_trade_tick(&mut message);
+        let result = decode_trade_tick(time_tz::timezones::db::UTC, &mut message);
         assert!(result.is_err(), "Should fail with invalid tick type");
         assert!(result.unwrap_err().to_string().contains("Unexpected tick_type"));
     }
@@ -71,7 +71,7 @@ mod trade_tick_tests {
     fn test_decode_trade_tick_with_empty_fields() {
         let mut message = ResponseMessage::from("99\09000\01\01678740829\03895.25\07\02\0\0\0");
 
-        let trade = decode_trade_tick(&mut message).expect("Failed to decode trade tick");
+        let trade = decode_trade_tick(time_tz::timezones::db::UTC, &mut message).expect("Failed to decode trade tick");
 
         assert_eq!(trade.exchange, "", "Exchange should be empty");
         assert_eq!(trade.special_conditions, "", "Special conditions should be empty");
@@ -86,7 +86,7 @@ mod bid_ask_tests {
     fn test_decode_bid_ask_basic() {
         let mut message = ResponseMessage::from("99\09000\03\01678745793\03895.50\03896.00\09\011\03\0");
 
-        let bid_ask = decode_bid_ask_tick(&mut message).expect("Failed to decode bid/ask tick");
+        let bid_ask = decode_bid_ask_tick(time_tz::timezones::db::UTC, &mut message).expect("Failed to decode bid/ask tick");
 
         assert_eq!(bid_ask.time, OffsetDateTime::from_unix_timestamp(1678745793).unwrap(), "Wrong timestamp");
         assert_eq!(bid_ask.bid_price, 3895.50, "Wrong bid price");
@@ -110,7 +110,7 @@ mod bid_ask_tests {
         for (mask, expected_bid_past_low, expected_ask_past_high) in test_cases {
             let mut message = ResponseMessage::from(format!("99\09000\03\01678745793\03895.50\03896.00\09\011\0{}\0", mask).as_str());
 
-            let bid_ask = decode_bid_ask_tick(&mut message).expect("Failed to decode bid/ask tick");
+            let bid_ask = decode_bid_ask_tick(time_tz::timezones::db::UTC, &mut message).expect("Failed to decode bid/ask tick");
 
             assert_eq!(
                 bid_ask.bid_ask_attribute.bid_past_low, expected_bid_past_low,
@@ -129,7 +129,7 @@ mod bid_ask_tests {
     fn test_decode_bid_ask_invalid_type() {
         let mut message = ResponseMessage::from("99\09000\01\01678745793\03895.50\03896.00\09\011\03\0");
 
-        let result = decode_bid_ask_tick(&mut message);
+        let result = decode_bid_ask_tick(time_tz::timezones::db::UTC, &mut message);
         assert!(result.is_err(), "Should fail with invalid tick type");
         assert!(result.unwrap_err().to_string().contains("Unexpected tick_type"));
     }

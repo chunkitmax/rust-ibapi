@@ -147,6 +147,15 @@ impl Client {
         self.connection_time
     }
 
+    pub fn time_zone(&self) -> &Tz {
+        if let Some(tz) = self.time_zone {
+            tz
+        } else {
+            warn!("server timezone unknown. assuming UTC, but that may be incorrect!");
+            time_tz::timezones::db::UTC
+        }
+    }
+
     // === Accounts ===
 
     /// TWS's current time. TWS is synchronized with the server (not local computer) using NTP and this function will receive the current time in TWS.
