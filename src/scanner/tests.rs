@@ -12,8 +12,9 @@ fn test_scanner_parameters() {
     let message_bus = Arc::new(MessageBusStub {
         request_messages: RwLock::new(vec![]),
         response_messages: vec![
-            "19|2|<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ScanParameterResponse>\n<InstrumentList>...</InstrumentList>\n</ScanParameterResponse>".to_owned(),
-        ],
+      "19|2|<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ScanParameterResponse>\n<InstrumentList>...</InstrumentList>\n</ScanParameterResponse>"
+        .to_owned(),
+    ],
     });
 
     let client = Client::stubbed(message_bus, server_versions::SCANNER_GENERIC_OPTS);

@@ -31,6 +31,22 @@ pub(super) fn decode_realtime_bar(time_zone: &Tz, message: &mut ResponseMessage)
     })
 }
 
+pub(super) fn decode_historical_data_update(time_zone: &Tz, message: &mut ResponseMessage) -> Result<Bar, Error> {
+    message.skip(); // message type
+    message.skip(); // message request id
+
+    Ok(Bar {
+        count: message.next_int()?,
+        date: message.next_date_time()?.to_timezone(time_zone),
+        open: message.next_double()?,
+        close: message.next_double()?,
+        high: message.next_double()?,
+        low: message.next_double()?,
+        wap: message.next_double()?,
+        volume: message.next_double()?,
+    })
+}
+
 pub(super) fn decode_trade_tick(time_zone: &Tz, message: &mut ResponseMessage) -> Result<Trade, Error> {
     message.skip(); // message type
     message.skip(); // message request id
