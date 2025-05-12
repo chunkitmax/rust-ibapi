@@ -797,6 +797,18 @@ impl Client {
         historical::historical_data(self, contract, interval_end, duration, bar_size, Some(what_to_show), use_rth)
     }
 
+    pub fn historical_data_continuous<'a>(
+        &'a self,
+        contract: &Contract,
+        interval_end: Option<OffsetDateTime>,
+        duration: historical::Duration,
+        bar_size: historical::BarSize,
+        what_to_show: historical::WhatToShow,
+        use_rth: bool,
+    ) -> Result<(historical::HistoricalData, Subscription<'a, realtime::Bar>), Error> {
+        historical::historical_data_continuous(self, contract, interval_end, duration, bar_size, Some(what_to_show), use_rth)
+    }
+
     /// Requests interval of historical data ending now for [Contract].
     ///
     /// # Arguments

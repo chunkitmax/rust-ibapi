@@ -9,10 +9,15 @@ use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use time::{Date, OffsetDateTime};
 
-use crate::contracts::Contract;
-use crate::messages::{IncomingMessages, RequestMessage, ResponseMessage};
 use crate::transport::{InternalSubscription, Response};
+use crate::{
+    client::ResponseContext,
+    messages::{IncomingMessages, RequestMessage, ResponseMessage},
+};
+use crate::{client::Subscription, contracts::Contract};
 use crate::{server_versions, Client, Error, ToField, MAX_RETRIES};
+
+use super::realtime;
 
 mod decoders;
 mod encoders;
@@ -471,6 +476,67 @@ pub(crate) fn historical_data(
         match subscription.next() {
             Some(Ok(mut message)) if message.message_type() == IncomingMessages::HistoricalData => {
                 return decoders::decode_historical_data(client.server_version, time_zone(client), &mut message)
+            }
+            Some(Ok(message)) if message.message_type() == IncomingMessages::Error => return Err(Error::from(message)),
+            Some(Ok(message)) => return Err(Error::UnexpectedResponse(message)),
+            Some(Err(Error::ConnectionReset)) => continue,
+            Some(Err(e)) => return Err(e),
+            None => return Err(Error::UnexpectedEndOfStream),
+        }
+    }
+
+    Err(Error::ConnectionReset)
+}
+
+pub(crate) fn historical_data_continuous<'a>(
+    client: &'a Client,
+    contract: &Contract,
+    end_date: Option<OffsetDateTime>,
+    duration: Duration,
+    bar_size: BarSize,
+    what_to_show: Option<WhatToShow>,
+    use_rth: bool,
+) -> Result<(HistoricalData, Subscription<'a, realtime::Bar>), Error> {
+    if !contract.trading_class.is_empty() || contract.contract_id > 0 {
+        client.check_server_version(
+            server_versions::TRADING_CLASS,
+            "It does not support contract_id nor trading class parameters when requesting historical data.",
+        )?;
+    }
+
+    if what_to_show == Some(WhatToShow::Schedule) {
+        return Err(Error::InvalidArgument(
+            "It does not support requesting of historical schedule when requesting historical data update".to_string(),
+        ));
+    }
+
+    if end_date.is_some() && what_to_show == Some(WhatToShow::AdjustedLast) {
+        return Err(Error::InvalidArgument(
+            "end_date must be None when requesting WhatToShow::AdjustedLast.".into(),
+        ));
+    }
+
+    let request_id: i32 = client.next_request_id();
+    let request = encoders::encode_request_historical_data(
+        client.server_version(),
+        request_id,
+        contract,
+        end_date,
+        duration,
+        bar_size,
+        what_to_show,
+        use_rth,
+        true,
+        Vec::<crate::contracts::TagValue>::default(),
+    )?;
+
+    let subscription = client.send_request(request_id, request)?;
+
+    for _ in 0..MAX_RETRIES {
+        match subscription.next() {
+            Some(Ok(mut message)) if message.message_type() == IncomingMessages::HistoricalData => {
+                return decoders::decode_historical_data(client.server_version, time_zone(client), &mut message)
+                    .map(|historical_bars| (historical_bars, Subscription::new(client, subscription, ResponseContext::default())))
             }
             Some(Ok(message)) if message.message_type() == IncomingMessages::Error => return Err(Error::from(message)),
             Some(Ok(message)) => return Err(Error::UnexpectedResponse(message)),

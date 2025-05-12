@@ -55,7 +55,7 @@ pub(super) fn encode_request_historical_data(
     bar_size: BarSize,
     what_to_show: Option<WhatToShow>,
     use_rth: bool,
-    keep_up_to_data: bool,
+    keep_up_to_date: bool,
     chart_options: Vec<crate::contracts::TagValue>,
 ) -> Result<RequestMessage, Error> {
     const VERSION: i32 = 6;
@@ -112,7 +112,7 @@ pub(super) fn encode_request_historical_data(
     }
 
     if server_version >= server_versions::SYNT_REALTIME_BARS {
-        message.push_field(&keep_up_to_data);
+        message.push_field(&keep_up_to_date);
     }
 
     if server_version >= server_versions::LINKING {

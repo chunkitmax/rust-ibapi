@@ -122,10 +122,15 @@ pub struct Bar {
 }
 
 impl DataStream<Bar> for Bar {
-    const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::RealTimeBars];
+    const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::RealTimeBars, IncomingMessages::HistoricalDataUpdate];
 
     fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
-        decoders::decode_realtime_bar(message)
+        match message.message_type() {
+            IncomingMessages::RealTimeBars => decoders::decode_realtime_bar(message),
+            IncomingMessages::HistoricalDataUpdate => decoders::decode_historical_data_update(message),
+            IncomingMessages::Error => Err(Error::from(message.clone())),
+            _ => Err(Error::UnexpectedResponse(message.clone())),
+        }
     }
 
     fn cancel_message(_server_version: i32, request_id: Option<i32>, _context: &ResponseContext) -> Result<RequestMessage, Error> {
