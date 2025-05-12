@@ -124,10 +124,10 @@ pub struct Bar {
 impl DataStream<Bar> for Bar {
     const RESPONSE_MESSAGE_IDS: &[IncomingMessages] = &[IncomingMessages::RealTimeBars, IncomingMessages::HistoricalDataUpdate];
 
-    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
+    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<Self, Error> {
         match message.message_type() {
             IncomingMessages::RealTimeBars => decoders::decode_realtime_bar(message),
-            IncomingMessages::HistoricalDataUpdate => decoders::decode_historical_data_update(message),
+            IncomingMessages::HistoricalDataUpdate => decoders::decode_historical_data_update(client.time_zone(), message),
             IncomingMessages::Error => Err(Error::from(message.clone())),
             _ => Err(Error::UnexpectedResponse(message.clone())),
         }
