@@ -1,3 +1,9 @@
+//! News data retrieval and management functionality.
+//!
+//! This module provides access to news articles, bulletins, and news providers
+//! through the Interactive Brokers API. It supports real-time news feeds,
+//! historical news queries, and news article retrieval.
+
 use crate::market_data::realtime;
 use crate::{
     client::{DataStream, ResponseContext, SharesChannel, Subscription},
@@ -14,9 +20,12 @@ mod encoders;
 #[cfg(test)]
 mod tests;
 
+/// News provider information including code and name.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct NewsProvider {
+    /// The provider code identifier.
     pub code: String,
+    /// The provider's display name.
     pub name: String,
 }
 
@@ -89,9 +98,9 @@ pub struct NewsArticle {
 }
 
 impl DataStream<NewsArticle> for NewsArticle {
-    fn decode(client: &Client, message: &mut ResponseMessage) -> Result<NewsArticle, Error> {
+    fn decode(_client: &Client, message: &mut ResponseMessage) -> Result<NewsArticle, Error> {
         match message.message_type() {
-            IncomingMessages::HistoricalNews => Ok(decoders::decode_historical_news(client.time_zone, message.clone())?),
+            IncomingMessages::HistoricalNews => Ok(decoders::decode_historical_news(None, message.clone())?),
             IncomingMessages::HistoricalNewsEnd => Err(Error::EndOfStream),
             IncomingMessages::TickNews => Ok(decoders::decode_tick_news(message.clone())?),
             _ => Err(Error::UnexpectedResponse(message.clone())),
@@ -145,12 +154,13 @@ impl From<i32> for ArticleType {
     }
 }
 
+/// News article body containing the full article content.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Default)]
 pub struct NewsArticleBody {
     /// The type of news article ([ArticleType::Text] - plain text or html, [ArticleType::Binary] - binary data / pdf)
-    article_type: ArticleType,
+    pub article_type: ArticleType,
     /// The body of article (if [ArticleType::Binary], the binary data is encoded using the Base64 scheme)
-    article_text: String,
+    pub article_text: String,
 }
 
 pub(super) fn news_article(client: &Client, provider_code: &str, article_id: &str) -> Result<NewsArticleBody, Error> {

@@ -1,3 +1,9 @@
+//! Client implementation for connecting to and communicating with TWS and IB Gateway.
+//!
+//! The Client provides the main interface for establishing connections, sending requests,
+//! and receiving responses from the Interactive Brokers API. It manages message routing,
+//! subscriptions, and maintains the connection state.
+
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::TcpStream;
@@ -138,6 +144,18 @@ impl Client {
         self.order_id.store(order_id, Ordering::Relaxed)
     }
 
+    /// Returns the version of the TWS API server to which the client is connected.
+    /// This version is determined during the initial connection handshake.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ibapi::Client;
+    ///
+    /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
+    /// let server_version = client.server_version();
+    /// println!("Connected to TWS server version: {}", server_version);
+    /// ```
     pub fn server_version(&self) -> i32 {
         self.server_version
     }
@@ -330,7 +348,6 @@ impl Client {
     /// # Arguments
     /// * `account`        - Account values can be requested for a particular account.
     /// * `model_code`     - Account values can also be requested for a model.
-    /// * `ledger_and_nlv` - Returns light-weight request; only currency positions as opposed to account values and currency positions.
     ///
     /// # Examples
     ///
@@ -380,7 +397,7 @@ impl Client {
 
     /// Requests contract information.
     ///
-    /// Provides all the contracts matching the contract provided. It can also be used to retrieve complete options and futures chains. Though it is now (in API version > 9.72.12) advised to use reqSecDefOptParams for that purpose.
+    /// Provides all the contracts matching the contract provided. It can also be used to retrieve complete options and futures chains. Though it is now (in API version > 9.72.12) advised to use [Client::option_chain] for that purpose.
     ///
     /// # Arguments
     /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
@@ -453,7 +470,7 @@ impl Client {
     ///
     /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
     ///
-    /// let contract = Contract::stock("AAPL");
+    /// let contract = Contract::option("AAPL", "20251219", 150.0, "C");
     /// let calculation = client.calculate_option_price(&contract, 100.0, 235.0).expect("request failed");
     /// println!("calculation: {:?}", calculation);
     /// ```
@@ -723,8 +740,7 @@ impl Client {
     /// * `exercise_action`   - Exercise option. ExerciseAction::Exercise or ExerciseAction::Lapse.
     /// * `exercise_quantity` - Number of contracts to be exercised.
     /// * `account`           - Destination account.
-    /// * `ovrd`              - Specifies whether your setting will override the system’s natural action.
-    ///                         For example, if your action is "exercise" and the option is not in-the-money, by natural action the option would not exercise. If you have override set to true the natural action would be overridden and the out-of-the money option would be exercised.
+    /// * `ovrd`              - Specifies whether your setting will override the system’s natural action. For example, if your action is "exercise" and the option is not in-the-money, by natural action the option would not exercise. If you have override set to true the natural action would be overridden and the out-of-the money option would be exercised.
     /// * `manual_order_time` - Specify the time at which the options should be exercised. If `None`, the current time will be used. Requires TWS API 10.26 or higher.
     pub fn exercise_options<'a>(
         &'a self,
@@ -872,7 +888,6 @@ impl Client {
     ///
     /// ```no_run
     /// use time::macros::datetime;
-    //
     /// use ibapi::contracts::Contract;
     /// use ibapi::Client;
     /// use ibapi::market_data::historical::ToDuration;
@@ -1058,7 +1073,7 @@ impl Client {
     /// # Arguments
     /// * `contract`  - [Contract] to retrieve [Histogram Entries](historical::HistogramEntry) for.
     /// * `use_rth`   - Data from regular trading hours (true), or all available hours (false).
-    /// * `duration`  - Duration of interval to retrieve.
+    /// * `period`    - The time period of each histogram bar (e.g., `BarSize::Day`, `BarSize::Week`, `BarSize::Month`).
     ///
     /// # Examples
     ///
@@ -1088,8 +1103,6 @@ impl Client {
     // === Realtime Market Data ===
 
     /// Requests realtime bars.
-    ///
-    /// This method will provide all the contracts matching the contract provided. It can also be used to retrieve complete options and futures chains. Though it is now (in API version > 9.72.12) advised to use reqSecDefOptParams for that purpose.
     ///
     /// # Arguments
     /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
@@ -1123,9 +1136,29 @@ impl Client {
     /// Requests tick by tick AllLast ticks.
     ///
     /// # Arguments
-    /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
-    /// * `number_of_ticks` - number of ticks.
-    /// * `ignore_size` - ignore size flag.
+    /// * `contract`        - The [Contract] for which to request tick-by-tick data.
+    /// * `number_of_ticks` - The number of ticks to retrieve. TWS usually limits this to 1000.
+    /// * `ignore_size`     - Specifies if tick sizes should be ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ibapi::Client;
+    /// use ibapi::contracts::Contract;
+    ///
+    /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
+    ///
+    /// let contract = Contract::stock("AAPL");
+    /// let number_of_ticks = 10; // Request a small number of ticks for the example
+    /// let ignore_size = false;
+    ///
+    /// let subscription = client.tick_by_tick_all_last(&contract, number_of_ticks, ignore_size)
+    ///     .expect("tick-by-tick all last data request failed");
+    ///
+    /// for tick in subscription.iter().take(number_of_ticks as usize) { // Take to limit example output
+    ///     println!("All Last Tick: {:?}", tick);
+    /// }
+    /// ```
     pub fn tick_by_tick_all_last<'a>(
         &'a self,
         contract: &Contract,
@@ -1138,9 +1171,29 @@ impl Client {
     /// Requests tick by tick BidAsk ticks.
     ///
     /// # Arguments
-    /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
-    /// * `number_of_ticks` - number of ticks.
-    /// * `ignore_size` - ignore size flag.
+    /// * `contract`        - The [Contract] for which to request tick-by-tick data.
+    /// * `number_of_ticks` - The number of ticks to retrieve. TWS usually limits this to 1000.
+    /// * `ignore_size`     - Specifies if tick sizes should be ignored. (typically true for BidAsk ticks to get changes based on price).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ibapi::Client;
+    /// use ibapi::contracts::Contract;
+    ///
+    /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
+    ///
+    /// let contract = Contract::stock("AAPL");
+    /// let number_of_ticks = 10; // Request a small number of ticks for the example
+    /// let ignore_size = false;
+    ///
+    /// let subscription = client.tick_by_tick_bid_ask(&contract, number_of_ticks, ignore_size)
+    ///     .expect("tick-by-tick bid/ask data request failed");
+    ///
+    /// for tick in subscription.iter().take(number_of_ticks as usize) { // Take to limit example output
+    ///     println!("BidAsk Tick: {:?}", tick);
+    /// }
+    /// ```
     pub fn tick_by_tick_bid_ask<'a>(
         &'a self,
         contract: &Contract,
@@ -1153,9 +1206,29 @@ impl Client {
     /// Requests tick by tick Last ticks.
     ///
     /// # Arguments
-    /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
-    /// * `number_of_ticks` - number of ticks.
-    /// * `ignore_size` - ignore size flag.
+    /// * `contract`        - The [Contract] for which to request tick-by-tick data.
+    /// * `number_of_ticks` - The number of ticks to retrieve. TWS usually limits this to 1000.
+    /// * `ignore_size`     - Specifies if tick sizes should be ignored (typically false for Last ticks).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ibapi::Client;
+    /// use ibapi::contracts::Contract;
+    ///
+    /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
+    ///
+    /// let contract = Contract::stock("AAPL");
+    /// let number_of_ticks = 10; // Request a small number of ticks for the example
+    /// let ignore_size = false;
+    ///
+    /// let subscription = client.tick_by_tick_last(&contract, number_of_ticks, ignore_size)
+    ///     .expect("tick-by-tick last data request failed");
+    ///
+    /// for tick in subscription.iter().take(number_of_ticks as usize) { // Take to limit example output
+    ///     println!("Last Tick: {:?}", tick);
+    /// }
+    /// ```
     pub fn tick_by_tick_last<'a>(
         &'a self,
         contract: &Contract,
@@ -1168,9 +1241,29 @@ impl Client {
     /// Requests tick by tick MidPoint ticks.
     ///
     /// # Arguments
-    /// * `contract` - The [Contract] used as sample to query the available contracts. Typically, it will contain the [Contract]'s symbol, currency, security_type, and exchange.
-    /// * `number_of_ticks` - number of ticks.
-    /// * `ignore_size` - ignore size flag.
+    /// * `contract`        - The [Contract] for which to request tick-by-tick data.
+    /// * `number_of_ticks` - The number of ticks to retrieve. TWS usually limits this to 1000.
+    /// * `ignore_size`     - Specifies if tick sizes should be ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use ibapi::Client;
+    /// use ibapi::contracts::Contract;
+    ///
+    /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
+    ///
+    /// let contract = Contract::stock("AAPL");
+    /// let number_of_ticks = 10; // Request a small number of ticks for the example
+    /// let ignore_size = false;
+    ///
+    /// let subscription = client.tick_by_tick_bid_ask(&contract, number_of_ticks, ignore_size)
+    ///     .expect("tick-by-tick mid-point data request failed");
+    ///
+    /// for tick in subscription.iter().take(number_of_ticks as usize) { // Take to limit example output
+    ///     println!("MidPoint Tick: {:?}", tick);
+    /// }
+    /// ```
     pub fn tick_by_tick_midpoint<'a>(
         &'a self,
         contract: &Contract,
@@ -1214,7 +1307,6 @@ impl Client {
     /// ```no_run
     /// use ibapi::Client;
     /// use ibapi::contracts::Contract;
-    /// use ibapi::market_data::{MarketDataType};
     ///
     /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
     ///
@@ -1263,21 +1355,21 @@ impl Client {
     ///
     /// * `contract` - Contract for which the data is being requested.
     /// * `generic_ticks` - IDs of the available generic ticks:
-    ///         - 100 Option Volume (currently for stocks)
-    ///         - 101 Option Open Interest (currently for stocks)
-    ///         - 104 Historical Volatility (currently for stocks)
-    ///         - 105 Average Option Volume (currently for stocks)
-    ///         - 106 Option Implied Volatility (currently for stocks)
-    ///         - 162 Index Future Premium
-    ///         - 165 Miscellaneous Stats
-    ///         - 221 Mark Price (used in TWS P&L computations)
-    ///         - 225 Auction values (volume, price and imbalance)
-    ///         - 233 RTVolume - contains the last trade price, last trade size, last trade time, total volume, VWAP, and single trade flag.
-    ///         - 236 Shortable
-    ///         - 256 Inventory
-    ///         - 258 Fundamental Ratios
-    ///         - 411 Realtime Historical Volatility
-    ///         - 456 IBDividends
+    ///   - 100 Option Volume (currently for stocks)
+    ///   - 101 Option Open Interest (currently for stocks)
+    ///   - 104 Historical Volatility (currently for stocks)
+    ///   - 105 Average Option Volume (currently for stocks)
+    ///   - 106 Option Implied Volatility (currently for stocks)
+    ///   - 162 Index Future Premium
+    ///   - 165 Miscellaneous Stats
+    ///   - 221 Mark Price (used in TWS P&L computations)
+    ///   - 225 Auction values (volume, price and imbalance)
+    ///   - 233 RTVolume - contains the last trade price, last trade size, last trade time, total volume, VWAP, and single trade flag.
+    ///   - 236 Shortable
+    ///   - 256 Inventory
+    ///   - 258 Fundamental Ratios
+    ///   - 411 Realtime Historical Volatility
+    ///   - 456 IBDividends
     /// * `snapshot` - for users with corresponding real time market data subscriptions. A true value will return a one-time snapshot, while a false value will provide streaming data.
     /// * `regulatory_snapshot` - snapshot for US stocks requests NBBO snapshots for users which have "US Securities Snapshot Bundle" subscription but not corresponding Network A, B, or C subscription necessary for streaming market data. One-time snapshot of current market price that will incur a fee of 1 cent to the account per snapshot.
     ///
@@ -1380,19 +1472,31 @@ impl Client {
     ///
     /// ```no_run
     /// use ibapi::Client;
+    /// use ibapi::contracts::Contract; // Or remove if conId is always known
     /// use time::macros::datetime;
     ///
     /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
     ///
-    /// let contract_id = 76792991; // TSLA
-    /// let provider_codes = vec!["BRFG", "DJ-N", "DJ-RT"];
-    /// let start_time = datetime!(2023-04-15 0:00 UTC);
-    /// let end_time = datetime!(2023-04-15 0:00 UTC);
-    /// let total_results = 10;
+    /// // Example: Fetch historical news for a known contract ID (e.g., AAPL's conId)
+    /// let contract_id = 265598;
+    /// let provider_codes = &["DJNL", "BRFG"]; // Example provider codes
+    /// // Define a past date range for the news query
+    /// let start_time = datetime!(2023-01-01 0:00 UTC);
+    /// let end_time = datetime!(2023-01-02 0:00 UTC);
+    /// let total_results = 5u8; // Request a small number of articles for the example
     ///
-    /// let news_bulletins = client.news_bulletins(true).expect("request news providers failed");
-    /// for news_bulletin in &news_bulletins {
-    ///   println!("news bulletin {:?}", news_bulletin);
+    /// let articles_subscription = client.historical_news(
+    ///     contract_id,
+    ///     provider_codes,
+    ///     start_time,
+    ///     end_time,
+    ///     total_results,
+    /// ).expect("request historical news failed");
+    ///
+    /// println!("Requested historical news articles:");
+    /// for article in articles_subscription.iter().take(total_results as usize) {
+    ///     println!("- Headline: {}, ID: {}, Provider: {}, Time: {}",
+    ///              article.headline, article.article_id, article.provider_code, article.time);
     /// }
     /// ```
     pub fn historical_news(
@@ -1490,11 +1594,48 @@ impl Client {
     ///
     /// ```no_run
     /// use ibapi::Client;
+    /// use ibapi::scanner::ScannerSubscription;
+    /// use ibapi::orders::TagValue; // Or ensure common::TagValue is the correct path
     ///
     /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
     ///
-    /// let parameters = client.scanner_parameters().expect("request scanner parameters failed");
-    /// println!("{:?}", parameters);
+    /// let mut sub = ScannerSubscription::default();
+    /// sub.instrument = Some("STK".to_string());
+    /// sub.location_code = Some("STK.US.MAJOR".to_string());
+    /// sub.scan_code = Some("TOP_PERC_GAIN".to_string());
+    /// // Further customize the subscription object as needed, for example:
+    /// // sub.above_price = Some(1.0);
+    /// // sub.below_price = Some(100.0);
+    /// // sub.number_of_rows = Some(20);
+    ///
+    /// // Filter options are advanced and not always needed. Pass an empty Vec if not used.
+    /// let filter_options: Vec<TagValue> = Vec::new();
+    /// // Example of adding a filter:
+    /// // filter_options.push(TagValue { tag: "marketCapAbove".to_string(), value: "1000000000".to_string() });
+    ///
+    /// match client.scanner_subscription(&sub, &filter_options) {
+    ///     Ok(subscription) => {
+    ///         // Iterate over received scanner data.
+    ///         // Note: Scanner subscriptions can be continuous or return a snapshot.
+    ///         // This example just takes the first batch if available.
+    ///         if let Some(scanner_results_vec) = subscription.iter().next() {
+    ///             println!("Scanner Results (first batch):");
+    ///             for data in scanner_results_vec {
+    ///                 println!("  Rank: {}, Symbol: {}",
+    ///                          data.rank,
+    ///                          data.contract_details.contract.symbol);
+    ///             }
+    ///         } else {
+    ///             println!("No scanner results received in the first check.");
+    ///         }
+    ///         // In a real application, you might continuously iterate or handle updates.
+    ///         // Remember to cancel the subscription when no longer needed if it's continuous.
+    ///         // subscription.cancel();
+    ///     }
+    ///     Err(e) => {
+    ///         eprintln!("Failed to start scanner subscription: {}", e);
+    ///     }
+    /// };
     /// ```
     pub fn scanner_parameters(&self) -> Result<String, Error> {
         scanner::scanner_parameters(self)
@@ -1506,11 +1647,48 @@ impl Client {
     ///
     /// ```no_run
     /// use ibapi::Client;
+    /// use ibapi::scanner::ScannerSubscription;
+    /// use ibapi::orders::TagValue;
     ///
     /// let client = Client::connect("127.0.0.1:4002", 100).expect("connection failed");
     ///
-    /// let parameters = client.scanner_parameters().expect("request scanner parameters failed");
-    /// println!("{:?}", parameters);
+    /// let mut sub = ScannerSubscription::default();
+    /// sub.instrument = Some("STK".to_string());
+    /// sub.location_code = Some("STK.US.MAJOR".to_string());
+    /// sub.scan_code = Some("TOP_PERC_GAIN".to_string());
+    /// // Further customize the subscription object as needed, for example:
+    /// // sub.above_price = Some(1.0);
+    /// // sub.below_price = Some(100.0);
+    /// // sub.number_of_rows = Some(20);
+    ///
+    /// // Filter options are advanced and not always needed. Pass an empty Vec if not used.
+    /// let mut filter_options: Vec<TagValue> = Vec::new();
+    /// // Example of adding a filter:
+    /// // filter_options.push(TagValue { tag: "marketCapAbove".to_string(), value: "1000000000".to_string() });
+    ///
+    /// match client.scanner_subscription(&sub, &filter_options) {
+    ///     Ok(subscription) => {
+    ///         // Iterate over received scanner data.
+    ///         // Note: Scanner subscriptions can be continuous or return a snapshot.
+    ///         // This example just takes the first batch if available.
+    ///         if let Some(scanner_results_vec) = subscription.iter().next() {
+    ///             println!("Scanner Results (first batch):");
+    ///             for data in scanner_results_vec {
+    ///                 println!("  Rank: {}, Symbol: {}",
+    ///                          data.rank,
+    ///                          data.contract_details.contract.symbol);
+    ///             }
+    ///         } else {
+    ///             println!("No scanner results received in the first check.");
+    ///         }
+    ///         // In a real application, you might continuously iterate or handle updates.
+    ///         // Remember to cancel the subscription when no longer needed if it's continuous.
+    ///         // subscription.cancel();
+    ///     }
+    ///     Err(e) => {
+    ///         eprintln!("Failed to start scanner subscription: {}", e);
+    ///     }
+    /// };
     /// ```
     pub fn scanner_subscription(
         &self,
@@ -1690,13 +1868,14 @@ impl Debug for Client {
 /// Alternatively, you may poll subscriptions in a blocking or non-blocking manner using the [next](Subscription::next), [try_next](Subscription::try_next) or [next_timeout](Subscription::next_timeout) methods.
 #[allow(private_bounds)]
 #[derive(Debug)]
-pub struct Subscription<'a, T: DataStream<T>> {
+pub struct Subscription<'a, T: DataStream<T> + 'static> {
     client: &'a Client,
     request_id: Option<i32>,
     order_id: Option<i32>,
     message_type: Option<OutgoingMessages>,
     phantom: PhantomData<T>,
     cancelled: AtomicBool,
+    snapshot_ended: AtomicBool,
     subscription: InternalSubscription,
     response_context: ResponseContext,
     error: Mutex<Option<Error>>,
@@ -1710,7 +1889,7 @@ pub(crate) struct ResponseContext {
 }
 
 #[allow(private_bounds)]
-impl<'a, T: DataStream<T>> Subscription<'a, T> {
+impl<'a, T: DataStream<T> + 'static> Subscription<'a, T> {
     pub(crate) fn new(client: &'a Client, subscription: InternalSubscription, context: ResponseContext) -> Self {
         if let Some(request_id) = subscription.request_id {
             Subscription {
@@ -1722,6 +1901,7 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
                 response_context: context,
                 phantom: PhantomData,
                 cancelled: AtomicBool::new(false),
+                snapshot_ended: AtomicBool::new(false),
                 error: Mutex::new(None),
             }
         } else if let Some(order_id) = subscription.order_id {
@@ -1734,6 +1914,7 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
                 response_context: context,
                 phantom: PhantomData,
                 cancelled: AtomicBool::new(false),
+                snapshot_ended: AtomicBool::new(false),
                 error: Mutex::new(None),
             }
         } else if let Some(message_type) = subscription.message_type {
@@ -1746,6 +1927,7 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
                 response_context: context,
                 phantom: PhantomData,
                 cancelled: AtomicBool::new(false),
+                snapshot_ended: AtomicBool::new(false),
                 error: Mutex::new(None),
             }
         } else {
@@ -1818,7 +2000,13 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
 
     fn process_message(&self, mut message: ResponseMessage) -> Option<T> {
         match T::decode(self.client, &mut message) {
-            Ok(val) => Some(val),
+            Ok(val) => {
+                // Check if this decoded value represents the end of a snapshot subscription
+                if val.is_snapshot_end() {
+                    self.snapshot_ended.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                Some(val)
+            }
             Err(Error::EndOfStream) => None,
             Err(err) => {
                 error!("error decoding message: {err}");
@@ -1937,6 +2125,12 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
 
     /// Cancel the subscription
     pub fn cancel(&self) {
+        // Only cancel if snapshot hasn't ended (for market data snapshots)
+        // For streaming subscriptions, snapshot_ended will remain false
+        if self.snapshot_ended.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
         if self.cancelled.load(Ordering::Relaxed) {
             return;
         }
@@ -2111,7 +2305,7 @@ impl<'a, T: DataStream<T>> Subscription<'a, T> {
     }
 }
 
-impl<T: DataStream<T>> Drop for Subscription<'_, T> {
+impl<T: DataStream<T> + 'static> Drop for Subscription<'_, T> {
     fn drop(&mut self) {
         self.cancel();
     }
@@ -2132,15 +2326,20 @@ pub(crate) trait DataStream<T> {
     fn cancel_message(_server_version: i32, _request_id: Option<i32>, _context: &ResponseContext) -> Result<RequestMessage, Error> {
         Err(Error::NotImplemented)
     }
+
+    /// Returns true if this decoded value represents the end of a snapshot subscription
+    fn is_snapshot_end(&self) -> bool {
+        false
+    }
 }
 
 /// An iterator that yields items as they become available, blocking if necessary.
 #[allow(private_bounds)]
-pub struct SubscriptionIter<'a, T: DataStream<T>> {
+pub struct SubscriptionIter<'a, T: DataStream<T> + 'static> {
     subscription: &'a Subscription<'a, T>,
 }
 
-impl<T: DataStream<T>> Iterator for SubscriptionIter<'_, T> {
+impl<T: DataStream<T> + 'static> Iterator for SubscriptionIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2148,7 +2347,7 @@ impl<T: DataStream<T>> Iterator for SubscriptionIter<'_, T> {
     }
 }
 
-impl<'a, T: DataStream<T>> IntoIterator for &'a Subscription<'a, T> {
+impl<'a, T: DataStream<T> + 'static> IntoIterator for &'a Subscription<'a, T> {
     type Item = T;
     type IntoIter = SubscriptionIter<'a, T>;
 
@@ -2158,11 +2357,11 @@ impl<'a, T: DataStream<T>> IntoIterator for &'a Subscription<'a, T> {
 }
 
 #[allow(private_bounds)]
-pub struct SubscriptionOwnedIter<'a, T: DataStream<T>> {
+pub struct SubscriptionOwnedIter<'a, T: DataStream<T> + 'static> {
     subscription: Subscription<'a, T>,
 }
 
-impl<T: DataStream<T>> Iterator for SubscriptionOwnedIter<'_, T> {
+impl<T: DataStream<T> + 'static> Iterator for SubscriptionOwnedIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2170,7 +2369,7 @@ impl<T: DataStream<T>> Iterator for SubscriptionOwnedIter<'_, T> {
     }
 }
 
-impl<'a, T: DataStream<T> + 'a> IntoIterator for Subscription<'a, T> {
+impl<'a, T: DataStream<T> + 'static> IntoIterator for Subscription<'a, T> {
     type Item = T;
     type IntoIter = SubscriptionOwnedIter<'a, T>;
 
@@ -2181,11 +2380,11 @@ impl<'a, T: DataStream<T> + 'a> IntoIterator for Subscription<'a, T> {
 
 /// An iterator that yields items if they are available, without waiting.
 #[allow(private_bounds)]
-pub struct SubscriptionTryIter<'a, T: DataStream<T>> {
+pub struct SubscriptionTryIter<'a, T: DataStream<T> + 'static> {
     subscription: &'a Subscription<'a, T>,
 }
 
-impl<T: DataStream<T>> Iterator for SubscriptionTryIter<'_, T> {
+impl<T: DataStream<T> + 'static> Iterator for SubscriptionTryIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2195,12 +2394,12 @@ impl<T: DataStream<T>> Iterator for SubscriptionTryIter<'_, T> {
 
 /// An iterator that waits for the specified timeout duration for available data.
 #[allow(private_bounds)]
-pub struct SubscriptionTimeoutIter<'a, T: DataStream<T>> {
+pub struct SubscriptionTimeoutIter<'a, T: DataStream<T> + 'static> {
     subscription: &'a Subscription<'a, T>,
     timeout: Duration,
 }
 
-impl<T: DataStream<T>> Iterator for SubscriptionTimeoutIter<'_, T> {
+impl<T: DataStream<T> + 'static> Iterator for SubscriptionTimeoutIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
