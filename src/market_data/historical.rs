@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use log::{debug, warn};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use time::{Date, OffsetDateTime};
 

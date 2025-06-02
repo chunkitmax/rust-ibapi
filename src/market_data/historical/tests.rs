@@ -7,7 +7,6 @@ use crate::market_data::historical::ToDuration;
 use crate::messages::OutgoingMessages;
 use crate::stubs::MessageBusStub;
 
-use super::time_zone;
 use super::*;
 
 #[test]
@@ -750,7 +749,7 @@ fn test_time_zone_fallback() {
 
     // Test that the function returns UTC when client.time_zone is None
     assert_eq!(
-        time_zone(&client),
+        client.time_zone(),
         time_tz::timezones::db::UTC,
         "time_zone should fall back to UTC when client.time_zone is None"
     );
@@ -761,7 +760,7 @@ fn test_time_zone_fallback() {
 
     // Test that the function returns the client's time zone when it is set
     assert_eq!(
-        time_zone(&client),
+        client.time_zone(),
         time_tz::timezones::db::america::NEW_YORK,
         "time_zone should return client.time_zone when it is set"
     );

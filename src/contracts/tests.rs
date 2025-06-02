@@ -280,14 +280,14 @@ fn test_contract_constructors() {
     assert_eq!(stock.exchange, "SMART", "stock.exchange");
 
     // Test futures constructor
-    let futures = Contract::futures("ES");
-    assert_eq!(futures.symbol, "ES", "futures.symbol");
+    let futures = Contract::futures("ES", "CME");
+    assert_eq!(futures.local_symbol, "ES", "futures.symbol");
     assert_eq!(futures.security_type, SecurityType::Future, "futures.security_type");
     assert_eq!(futures.currency, "USD", "futures.currency");
-    assert_eq!(futures.exchange, "", "futures.exchange");
+    assert_eq!(futures.exchange, "CME", "futures.exchange");
 
     // Test crypto constructor
-    let crypto = Contract::crypto("BTC");
+    let crypto = Contract::crypto("BTC", "PAXOS");
     assert_eq!(crypto.symbol, "BTC", "crypto.symbol");
     assert_eq!(crypto.security_type, SecurityType::Crypto, "crypto.security_type");
     assert_eq!(crypto.currency, "USD", "crypto.currency");
@@ -857,7 +857,7 @@ fn test_is_bag() {
     assert!(!option_contract.is_bag(), "Option contract should not be a bag");
 
     // Test with a futures contract (not a bag/spread)
-    let futures_contract = Contract::futures("ES");
+    let futures_contract = Contract::futures("ES", "CME");
     assert!(!futures_contract.is_bag(), "Futures contract should not be a bag");
 
     // Test with a contract that is a bag/spread
